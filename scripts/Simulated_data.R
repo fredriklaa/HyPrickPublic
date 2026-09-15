@@ -1,34 +1,26 @@
 library(Matrix)
 library(INLA)
 #Can include pardiso if available
-#INLA::inla.setOption("pardiso.license","xxx/sys/licences/pardiso.lic")
+#INLA::inla.setOption("pardiso.license","/nr/samba/user/storvik/sys/licences/pardiso.lic")
 #INLA::inla.pardiso.check()
 library(data.table)
 library(ggplot2)
 library(xtable)
-library(Rcpp)
+#library(INLAconstraints)
 
 rm(list=ls())
-dir=""
-dirfun = paste0(dir,"/functions/")
-dirdata=paste0(dir,"/data/")
-
-source(paste0(dirfun,"SpaceTimeProjConstr.R"))
-source(paste0(dirfun,"GMRF_RW.R"))
-
+dir = "C://Users//fredr//OneDrive//Dokumenter//PartA//"
+dir = "functions/"
+#Update:
+source(paste0(dir,"SpaceTimeProjConstr.R"))
+source(paste0(dir,"GMRF_RW.R"))
 #rcpp called.
-Rcpp::sourceCpp(paste0(dirfun,"cp.cpp"))
-
-#Argument to INLA:
+Rcpp::sourceCpp(paste0(dir,"cp.cpp"))
 nthreads = "3:2"
 
 
 graph=system.file("demodata/germany.graph", package="INLA")
-
-
-#Read data:
-
-df = readRDS(paste0(dirdata,"/SpatioTemporalData.RDS"))
+df = readRDS("data/SpatioTemporalData.RDS")
 
 Q_ICAR=INLA::inla.graph2matrix(graph)
 diag(Q_ICAR)=0
@@ -37,7 +29,6 @@ diag(Q_ICAR)=-rowSums(Q_ICAR)
 ns=nrow(Q_ICAR)
 
 nt=20
-
 Q_RW2=GMRF_RW(n=nt,order=2)
 
 Q_st=kronecker(Q_RW2,Q_ICAR)
@@ -63,7 +54,8 @@ TQT=drop0(TQT,tol=0)
 
 C=1:nrow(t(A_Bolin))
 U=(1+nrow(t(A_Bolin))):(ncol(t(A_Bolin)))
-
+#TQT=(t(TMat$T)%*%((Q_st+Diagonal(ns*nt)*eps)[U,U]%*%(TMat$T)))
+#TQT=drop0(TQT)
 PC =SpaceTimeProjConstr(ns = ns,nt=nt,type ="SC",dim = "space")
 
 A_BB=kronecker(Diagonal(nt),rep(1,ns))
@@ -89,7 +81,7 @@ if(!file.exists(fil))
                        f(main_spatial,diagonal=0,model="generic0",Cmatrix=Q_ICAR+Diagonal(ns)*eps,constr=T)+
                        f(interaction,model="generic0",Cmatrix=Q_st+Diagonal(ns*nt)*eps,constr=F,
                          extraconstr = list(A=PC$A,e=rep(0,nrow(PC$A)))),
-                     data=df,verbose=T,family="poisson",control.fixed=prior.fixed,num.threads=nthreads)
+                     data=df,verbose=T,family="nbinomial",control.fixed=prior.fixed,num.threads=nthreads)
   #control.predictor=list(compute=TRUE
   saveRDS(StandardINLA,file=fil)
 }
@@ -103,7 +95,7 @@ if(!file.exists(fil))
                 f(main_spatial,diagonal=0,model="generic0",Cmatrix=Q_ICAR+Diagonal(ns)*eps,constr=T)+
                 f(interaction,model="z",diagonal=0,precision=1e5,Z=PC$P,Cmatrix = Q_st+Diagonal(ns*nt)*eps,constr=F,
                   extraconstr = list(A=cbind(A_newHymiK,A_newHymiK*0),e=rep(0,nrow(A_newHymiK)))),
-              data=df,verbose=T,family="poisson",control.fixed=prior.fixed,num.threads=nthreads)
+              data=df,verbose=T,family="nbinomial",control.fixed=prior.fixed,num.threads=nthreads)
   #control.predictor=list(compute=TRUE
   saveRDS(HyMiK,file=fil)
 }
@@ -116,9 +108,22 @@ if(!file.exists(fil))
   HyPrick = inla(Y~f(main_temporal,diagonal=0,model="generic0",Cmatrix=Q_RW2+Diagonal(nt)*eps,constr=T)+
                    f(main_spatial,diagonal=0,model="generic0",Cmatrix=Q_ICAR+Diagonal(ns)*eps,constr=T)+
                    f(interaction,model="generic0",diagonal=0,Cmatrix=Q_st+10^5*(Diagonal(nrow(Q_st))-PC$P)+Diagonal(nrow(Q_st))*eps,constr=F,extraconstr=list(A=A_old,e=rep(0,nrow(A_old)))),
-                 data=df,verbose=T,family="poisson",control.fixed=prior.fixed,num.threads=nthreads)
+                 data=df,verbose=T,family="nbinomial",control.fixed=prior.fixed,num.threads=nthreads)
   saveRDS(HyPrick,file=fil)
 } 
+
+fil = "sim.HyPrick0.RDS"
+if(file.exists(fil))
+  HyPrick = readRDS(fil)
+if(!file.exists(fil))
+{
+  HyPrick = inla(Y~f(main_temporal,diagonal=0,model="generic0",Cmatrix=Q_RW2+Diagonal(nt)*eps,constr=T)+
+                   f(main_spatial,diagonal=0,model="generic0",Cmatrix=Q_ICAR+Diagonal(ns)*eps,constr=T)+
+                   f(interaction,model="generic0",diagonal=0,Cmatrix=Q_st+10^5*(Diagonal(nrow(Q_st))-PC$P)+Diagonal(nrow(Q_st))*eps,constr=F,extraconstr=list(A=A_old,e=rep(0,nrow(A_old)))),
+                 data=df,verbose=T,family="nbinomial",control.fixed=prior.fixed,num.threads=nthreads)
+  saveRDS(HyPrick,file=fil)
+} 
+
 
 fil = "sim.bolinWallin.RDS"
 if(file.exists(fil))
@@ -129,13 +134,12 @@ if(!file.exists(fil))
                        f(main_spatial,diagonal=0,model="generic0",Cmatrix=Q_ICAR+Diagonal(ns)*eps,constr=T)+
                        f(interaction,Z=TMat$T[,U],precision = kap,model="z",diagonal = 0,Cmatrix=TQT[U,U]+eps*Diagonal(length(U)),
                          constr=F,extraconstr=list(A=cbind((A_newB),(A_new_BOLIN_sub)*0),e=rep(0,-1+ncol(A_BB)))),
-                     data=df,verbose=T,family="poisson",control.fixed=prior.fixed,num.threads=nthreads)
+                     data=df,verbose=T,family="nbinomial",control.fixed=prior.fixed,num.threads=nthreads)
   saveRDS(BolinWallin,file=fil)
 }
 
 tab =cbind(StandardINLA$summary.hyperpar$mean,HyMiK$summary.hyperpar$mean,
            BolinWallin$summary.hyperpar$mean,HyPrick$summary.hyperpar$mean)
-tab[1,] = 1/tab[1,]
 tab = rbind(c(StandardINLA$summary.fixed$mean,HyMiK$summary.fixed$mean,
               BolinWallin$summary.fixed$mean,HyPrick$summary.fixed$mean),
             tab,c(StandardINLA$cpu.used[4],HyMiK$cpu.used[4],BolinWallin$cpu.used[4],HyPrick$cpu.used[4]))
@@ -198,3 +202,81 @@ p2 = ggplot(data = plotDataSd) +
 (p1 + p2) + plot_layout(guides = "collect") & theme(legend.position = "right")
 
 ggsave("Sim_Interaction_E_sd.pdf")
+
+
+if(0)
+{
+  BolinWallin$summary.hyperpar
+  HyMiK$summary.hyperpar
+  HyPrick$summary.hyperpar$mean
+  
+  plot(HyMiK$summary.random$spat$sd,BolinWallin$summary.random$spat$sd)
+  abline(0,1)
+  plot(HyMiK$summary.random$temp$sd,BolinWallin$summary.random$temp$sd)
+  abline(0,1)
+  HyPrick$summary.hyperpar
+  HyMiK$summary.hyperpar
+  
+  HeadB=head(BolinWallin$summary.random$interaction$mean,ns*nt)
+  HeadH=head(HyMiK$summary.random$interaction$mean,ns*nt)
+  Headzd=head(HyMiK$summary.random$interaction$sd,ns*nt)
+  HeadzdBOLIN=head(BolinWallin$summary.random$interaction$sd,ns*nt)
+  
+  plot(HyPrick$summary.random$interaction$mean,HeadH)
+  abline(0,1)
+  
+  plot(HyPrick$summary.random$interaction$sd,Headzd)
+  abline(0,1)
+  
+  plot(HyPrick$summary.random$interaction$mean,HeadB)
+  abline(0,1)
+  plot(HyPrick$summary.random$interaction$sd,HeadzdBOLIN)
+  abline(0,1)
+  
+  
+  
+  #HymiK I vz HyMiK II
+  plot(HyPrick$summary.random$spat$mean,HyMiK$summary.random$spat$mean)
+  plot(HyPrick$summary.random$spat$sd,HyMiK$summary.random$spat$sd)
+  plot(HyPrick$summary.random$temp$mean,HyMiK$summary.random$temp$mean)
+  plot(HyPrick$summary.random$temp$sd,HyMiK$summary.random$temp$sd)
+  abline(0,1)
+  
+  
+  
+  
+  
+  
+  
+  show(c(StandardINLA$cpu.used[4],HyMiK$cpu.used[4],HyPrick$cpu.used[4],BolinWallin$cpu.used[4]))
+  
+  plot(HyPrick$summary.random$main_temporal$mean,StandardINLA$summary.random$main_temporal$mean)
+  abline(c(0,1))
+  
+  plot(HyPrick$summary.random$main_spatial$mean,StandardINLA$summary.random$main_spatial$mean)
+  abline(c(0,1))
+  
+  plot(HyPrick$summary.random$interaction$mean,StandardINLA$summary.random$interaction$mean[1:(nt*ns)])
+  abline(c(0,1))
+  
+  
+  
+  plot(HyPrick$summary.random$main_temporal$mean,HyMiK$summary.random$main_temporal$mean)
+  abline(c(0,1))
+  
+  plot(HyPrick$summary.random$main_spatial$mean,HyMiK$summary.random$main_spatial$mean)
+  abline(c(0,1))
+  
+  plot(HyPrick$summary.random$interaction$mean,HyMiK$summary.random$interaction$mean[1:(nt*ns)])
+  abline(c(0,1))
+  
+  
+  plot(HyPrick$summary.random$main_temporal$mean,BolinWallin$summary.random$main_temporal$mean)
+  abline(c(0,1))
+  
+  plot(HyPrick$summary.random$main_spatial$mean,BolinWallin$summary.random$main_spatial$mean)
+  abline(c(0,1))
+  
+  plot(HyPrick$summary.random$interaction$mean,BolinWallin$summary.random$interaction$mean[1:(nt*ns)])
+  abline(c(0,1))
+}

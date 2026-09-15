@@ -19,6 +19,8 @@ dir = "functions/"
 source(paste0(dir,"SpaceTimeProjConstr.R"))
 source(paste0(dir,"GMRF_RW.R"))
 source(paste0(dir,"inla_KnorrHeld4.R"))
+#rcpp called.
+Rcpp::sourceCpp(paste0(dir,"cp.cpp"))
 
 #Make data
 data("Carto_SpainMUN")
@@ -58,6 +60,7 @@ sc = FALSE
 #if(!file.exists(fil))
 #{
 #  StandardINLA = inla_KnorrHeld4(combined_data,Q_RW2,Qspat,indd=indd,extracov=extracov,family="poisson",scale=sc)
+#    control.predictor=list(compute=TRUE
 #  saveRDS(StandardINLA,file=fil)
 #}
 
@@ -75,8 +78,6 @@ if(file.exists(fil))
   BolinWallin = readRDS(fil)
 if(!file.exists(fil))
 {
-  #rcpp called.
-  Rcpp::sourceCpp(paste0(dir,"cp.cpp"))
   BolinWallin = inla_KnorrHeld4(combined_data,Q_RW2,Qspat,indd=indd,extracov=extracov,family="poisson",method="hybw",scale=sc)
   saveRDS(BolinWallin,file=fil)
 }
@@ -109,6 +110,7 @@ tab = rbind(c(HyMiK$summary.fixed$mean,
 colnames(tab) = c("HyMiK","HyBW","HyPrick")
 rownames(tab)=c("Mean","Precision Temporal","Precision Spatial","Precision Interaction","CPU")
 print(tab)
+print(xtable(tab,digits=3),type="latex",file="tab_large.tex")
 
 library(ggplot2)
 library(patchwork)
@@ -170,7 +172,7 @@ p2 = ggplot(data = plotDataSd) +
 
 (p1 + p2) + plot_layout(guides = "collect") & theme(legend.position = "right")
 
-ggsave("res_new/LargeData_Interaction_E_sd.pdf",height=5,width=5)
+ggsave("res_new/LargeData_Interaction_E_sd.png",device="png",height=5,width=5)
 
 
 
