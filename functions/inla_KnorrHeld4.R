@@ -137,6 +137,8 @@ inla_KnorrHeld4 = function(dataST,Qtemp,Qspat,indd=c(1,2,3,4),extracov="",family
   }
   if(method=="bw")
   {
+    #rcpp called.
+    Rcpp::sourceCpp(paste0(dir,"cp.cpp"))
     A_Bolin=A
     TMat=c_basis2(A_Bolin)
     
@@ -152,9 +154,41 @@ inla_KnorrHeld4 = function(dataST,Qtemp,Qspat,indd=c(1,2,3,4),extracov="",family
     form = as.formula(paste0(form,'+f(delta,model="z",diagonal=0,Z=TMat$T[,U],precision = kappa,Cmatrix=TQT[U,U]+eps*Diagonal(length(U)),constr=F)'))
     resinla = inla(form,data=dataST,verbose=T,family=family,control.fixed=prior.fixed,num.threads=nthreads)
   }
-  
+  if(method=="bw_A_formulation")
+  {
+    #rcpp called.
+    Rcpp::sourceCpp(paste0(dir,"cp.cpp"))
+    print("Note that extracov is *not* supported!")
+    if(length(extracov)>1){
+      print("Not supported!")
+      return(0)
+    }
+    A_Bolin=A
+    #browser()
+    TMat=c_basis2(A_Bolin)
+    
+    QT=(Q_st)%*%(TMat$T)
+    QT=drop0(QT,tol=0)
+    TQT=(t(TMat$T)%*%QT)
+    TQT=drop0(TQT,tol=0)
+    
+    C=1:nrow(A_Bolin)
+    U=(1+nrow(A_Bolin)):(ncol(A_Bolin))
+    
+    Xalpha=sparse.model.matrix(~-1+as.factor(alpha),dataST)
+    Xgamma=sparse.model.matrix(~-1+as.factor(gamma),dataST)
+    Xdelta=sparse.model.matrix(~-1+as.factor(delta),dataST)
+    Xtot=cbind(1,Xgamma,Xalpha,Xdelta%*%TMat$T[,U])
+    
+    form = paste0('Y~-1+Intercept+','f(gamma,model="generic0",diagonal=eps,Cmatrix=Qtemp,constr=T)+f(alpha,model="generic0",diagonal=eps,Cmatrix=Qspat,constr=T)')
+    
+    dataST_list=list(Y=dataST$Y,Intercept=c(1,rep(NA,ns+nt+length(U))),gamma=c(NA,1:nt,rep(NA,ns+length(U))),alpha=c(rep(NA,1+nt),1:ns,rep(NA,length(U))),delta=c(rep(NA,1+ns+nt),1:length(U)))
+    form = as.formula(paste0(form,'+f(delta,model="generic0",diagonal=0,Cmatrix=TQT[U,U]+eps*Diagonal(length(U)),constr=F)'))
+    resinla = inla(form,data=dataST_list,verbose=T,family=family,control.fixed=prior.fixed,num.threads=nthreads,control.predictor=list(A=Xtot))
+  }
   resinla
 }
+
 
 BWAlg1 = function(A)
 {
