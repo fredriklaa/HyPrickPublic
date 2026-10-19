@@ -16,7 +16,7 @@ library(spdep)
 rm(list=ls())
 
 dir = "functions/"
-source(paste0(dir,"SpaceTimeProjConstr.R"))
+#source(paste0(dir,"SpaceTimeProjConstr.R"))
 source(paste0(dir,"GMRF_RW.R"))
 source(paste0(dir,"inla_KnorrHeld4.R"))
 #rcpp called.
