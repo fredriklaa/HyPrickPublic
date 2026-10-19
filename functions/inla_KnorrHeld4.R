@@ -31,9 +31,9 @@ inla_KnorrHeld4 = function(dataST,Qtemp,Qspat,indd=c(1,2,3,4),extracov="",family
                            constr="SC",method="standard",nthreads = "12:2",prec.intercept=0,diagonal=1e-05,kappa=1e06)
 {
   #Convert names to "standard" names
-  names(dataST)[indd[1]] = "alpha"        # Temporal component
-  names(dataST)[indd[2]] = "gamma"        # Spatial component
-  names(dataST)[indd[3]] = "delta"        # Interaction compoment
+  names(dataST)[indd[1]] = "gamma"        # Spatial component
+  names(dataST)[indd[2]] = "alpha"        # Spatial component
+  names(dataST)[indd[3]] = "delta"        # Interaction component
   names(dataST)[indd[4]] = "Y"            # Response
 
 
@@ -98,7 +98,7 @@ inla_KnorrHeld4 = function(dataST,Qtemp,Qspat,indd=c(1,2,3,4),extracov="",family
 
   #Formula including covariates and main effects
   extracov = paste0(extracov,'+')
-  form = paste0('Y~',extracov,'f(gamma,model="generic0",diagonal=eps,Cmatrix=Qtemp,constr=T)+f(alpha,model="generic0",diagonal=eps,Cmatrix=Qspat,constr=T)')
+  form = paste0('Y~',extracov,'f(alpha,model="generic0",diagonal=eps,Cmatrix=Qtemp,constr=T)+f(gamma,model="generic0",diagonal=eps,Cmatrix=Qspat,constr=T)')
   
   if(method=="standard")
   {
